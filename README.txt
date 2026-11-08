@@ -1,5 +1,4 @@
-Laser-Kalkulator Android PWA – neue App-ID
-
-Alle sechs Dateien entpacken und im Stammverzeichnis des GitHub-Repositories hochladen. Vorhandene Dateien ersetzen. GitHub Pages aktualisieren lassen und Seite in Chrome neu laden. Dann über Chrome-Menü installieren.
-
-Hinweis: Neue App-ID verhindert manche Konflikte mit alten Installationen, kann aber Android-/Chrome-Caches nicht garantiert reparieren.
+Laser-Kalkulator V4 - GitHub Pages PWA
+Alle Dateien (inkl. qr-local.js) ins Repository-Hauptverzeichnis hochladen.
+IBAN und Zahlungsfrist werden lokal je Gerät gespeichert.
+Schweizer QR-Zahlteil vor Verwendung mit Banking-App prüfen.

@@ -1,7 +1,7 @@
 {
   "name": "Laser-Kalkulator Neu",
   "short_name": "Laser Kalkulator",
-  "description": "Laserteile kalkulieren und PDF-Offerten erstellen",
+  "description": "Laserbearbeitung kalkulieren, Offerten, Auftragsbestätigungen und Rechnungen mit QR-Zahlteil erstellen",
   "start_url": "./?app=laser-kalkulator-v2",
   "scope": "./",
   "display": "standalone",
