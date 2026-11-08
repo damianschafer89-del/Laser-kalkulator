@@ -1,1 +1,5 @@
-GitHub Pages: Alle Dateien aus diesem ZIP in das Hauptverzeichnis des neuen Repositorys hochladen (nicht den übergeordneten Ordner). Settings > Pages > Deploy from a branch > main > /(root). Danach Webseite in Chrome auf Android öffnen und im Browsermenü Installieren bzw. Zum Startbildschirm hinzufügen auswählen. Offline nach dem ersten vollständigen Laden. HTTPS ist erforderlich.
+Laser-Kalkulator Android PWA – neue App-ID
+
+Alle sechs Dateien entpacken und im Stammverzeichnis des GitHub-Repositories hochladen. Vorhandene Dateien ersetzen. GitHub Pages aktualisieren lassen und Seite in Chrome neu laden. Dann über Chrome-Menü installieren.
+
+Hinweis: Neue App-ID verhindert manche Konflikte mit alten Installationen, kann aber Android-/Chrome-Caches nicht garantiert reparieren.

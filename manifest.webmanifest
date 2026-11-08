@@ -1,8 +1,8 @@
 {
-  "name": "Laser-Kalkulator",
+  "name": "Laser-Kalkulator Neu",
   "short_name": "Laser Kalkulator",
   "description": "Laserteile kalkulieren und PDF-Offerten erstellen",
-  "start_url": "./",
+  "start_url": "./?app=laser-kalkulator-v2",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f5f7fa",
@@ -20,5 +20,6 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "id": "./laser-kalkulator-app-2026-v2"
 }
