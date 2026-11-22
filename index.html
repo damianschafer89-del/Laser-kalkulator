@@ -1425,7 +1425,15 @@ function pdfBytes(){
  if($('valid').value){line(($('documentType').value==='Offerte'?'Gueltig bis: ':'Termin: ')+$('valid').value.split('-').reverse().join('.'),margin,y,10);y+=24}
  function tablehead(){rect(margin,y-15,503,26,pale);line('POSITION / BESCHREIBUNG',margin+8,y+2,9,true);line('MENGE',341,y+2,9,true);line('EINZEL CHF',406,y+2,9,true);line('TOTAL CHF',493,y+2,9,true);y+=23}
  tablehead();let sum=0;
- for(let p of positions){if(y>728){newpage();tablehead()}let total=p.qty*p.unit;sum+=total;let lines=wrap(p.name,48);for(let i=0;i<lines.length;i++){line(lines[i],margin+8,y,10,i===0);y+=14}if(p.info?.length){for(let info of p.info){line(info,margin+8,y,8,false,[.45,.54,.60]);y+=11}}else if(p.width||p.height){line(`${p.width} x ${p.height} mm`,margin+8,y,8,false,[.45,.54,.60]);y+=11}line(String(p.qty),351,y-14,10);line(p.unit.toFixed(2),416,y-14,10);line(total.toFixed(2),503,y-14,10);y+=19;for(let img of (p.offerImages||[])){let h=Math.min(125,260*img.height/img.width),w=h*img.width/img.height;if(y+h+12>780){newpage();tablehead()}drawImage(img,margin+8,y,w,h);y+=h+10}if((p.attachments||[]).some(n=>!(p.offerImages||[]).some(im=>im.name===n))){for(let n of p.attachments.filter(n=>!(p.offerImages||[]).some(im=>im.name===n))){if(y>770){newpage();tablehead()}line('Anhang: '+n,margin+8,y,8,false,[.45,.54,.60]);y+=13}}rect(margin,y-8,503,.6,[.88,.92,.94])}
+ for(let p of positions){
+ // A position is indivisible: reserve its full description, all images and attachments.
+ const nameLines=wrap(p.name,48).length;
+ const detailLines=p.info?.length||((p.width||p.height)?1:0);
+ const imageHeight=(p.offerImages||[]).reduce((a,img)=>a+Math.min(125,260*img.height/img.width)+10,0);
+ const attachmentCount=(p.attachments||[]).filter(n=>!(p.offerImages||[]).some(im=>im.name===n)).length;
+ const blockHeight=nameLines*14+detailLines*11+19+imageHeight+attachmentCount*13+19;
+ if(y+blockHeight>775){newpage();tablehead()}
+ let total=p.qty*p.unit;sum+=total;let lines=wrap(p.name,48);for(let i=0;i<lines.length;i++){line(lines[i],margin+8,y,10,i===0);y+=14}if(p.info?.length){for(let info of p.info){line(info,margin+8,y,8,false,[.45,.54,.60]);y+=11}}else if(p.width||p.height){line(`${p.width} x ${p.height} mm`,margin+8,y,8,false,[.45,.54,.60]);y+=11}line(String(p.qty),351,y-14,10);line(p.unit.toFixed(2),416,y-14,10);line(total.toFixed(2),503,y-14,10);y+=19;for(let img of (p.offerImages||[])){let h=Math.min(125,260*img.height/img.width),w=h*img.width/img.height;if(y+h+12>790 && blockHeight>650){newpage();tablehead()}if(img.vectorPolys?.length&&img.vectorWidth>0&&img.vectorHeight>0){let sc=Math.min(w/img.vectorWidth,h/img.vectorHeight),ox=margin+8,oy=y;ops.push('0 0 0 RG 0.65 w');for(let poly of img.vectorPolys){if(poly.length<2)continue;ops.push(`${(ox+poly[0][0]*sc).toFixed(3)} ${(pageH-oy-poly[0][1]*sc).toFixed(3)} m`);for(let k=1;k<poly.length;k++)ops.push(`${(ox+poly[k][0]*sc).toFixed(3)} ${(pageH-oy-poly[k][1]*sc).toFixed(3)} l`);ops.push('h S')}}else drawImage(img,margin+8,y,w,h);y+=h+10}if((p.attachments||[]).some(n=>!(p.offerImages||[]).some(im=>im.name===n))){for(let n of p.attachments.filter(n=>!(p.offerImages||[]).some(im=>im.name===n))){if(y>770){newpage();tablehead()}line('Anhang: '+n,margin+8,y,8,false,[.45,.54,.60]);y+=13}}rect(margin,y-8,503,.6,[.88,.92,.94]);y+=18}
  if(y>665)newpage();y+=15;let discount=discountFor(sum),net=sum-discount,tax=$('vatEnabled').value==='yes'?net*num('vat')/100:0;
  line('Zwischentotal',369,y,10);line('CHF '+sum.toFixed(2),481,y,10,true);y+=21;
  if(discount>0){line('Rabatt',369,y,10);line('- CHF '+discount.toFixed(2),481,y,10);y+=21;}
@@ -1481,4 +1489,180 @@ document.addEventListener('change',e=>{if(e.target.matches('input,select,textare
 $('save').onclick=()=>{let fields={};document.querySelectorAll('input:not([type=file]),select,textarea').forEach(el=>fields[el.id]=el.value);let blob=new Blob([JSON.stringify({fields,positions,templates,activeTemplate,logoData,closingTexts},null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='laser-projekt.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
 ['vat','vatEnabled','discountType','discountValue'].forEach(id=>$(id).addEventListener('input',render));
 $('load').onclick=()=>$('loadfile').click();$('loadfile').onchange=async e=>{try{let d=JSON.parse(await e.target.files[0].text());Object.entries(d.fields||{}).forEach(([k,v])=>{if($(k))$(k).value=v});if(Array.isArray(d.templates)&&d.templates.length){templates=d.templates;activeTemplate=d.activeTemplate||templates[0].id;persistTemplates();populateTemplates()}if(!$('sender').value.trim())$('sender').value=DEFAULT_SENDER;if(!d.fields?.ibanChoice){$('ibanChoice').value=(!d.fields?.iban||d.fields.iban.replace(/\s/g,'')===DEFAULT_IBAN.replace(/\s/g,''))?'default':'other';}syncIbanChoice();positions=Array.isArray(d.positions)?d.positions:[];logoData=d.logoData||null;updateLogoPreview();closingTexts={...defaultClosings,...(d.closingTexts||{})};syncDocumentType();render();scheduleAutosave()}catch(e){alert('Projektdatei ungültig')}};restoreAutosave();syncIbanChoice();syncDocumentType();ensureDocumentNumber();render();
-</script></body></html>
+</script><style>
+#nestPanel{margin:22px auto;max-width:1100px}#nestPanel .nestgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}#nestPanel label{display:block;font-size:13px}#nestPanel input,#nestPanel select{width:100%;box-sizing:border-box}#nestPanel .nestrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}#nestPanel .nestrow button{margin:0}#nestParts{width:100%;border-collapse:collapse}#nestParts td,#nestParts th{padding:8px;border-bottom:1px solid #ddd;text-align:left}#nestParts input{max-width:75px}#nestParts img{width:65px;height:50px;object-fit:contain}#nestPreview{overflow:auto;background:#f1f5f9;border-radius:10px;padding:12px}#nestPreview svg{display:block;max-width:100%;height:auto;background:white;margin:10px auto;box-shadow:0 1px 5px #bbb}#nestStatus{font-size:13px;color:#475569}#nestPanel .nestNote{font-size:12px;color:#64748b}
+</style>
+<section class="panel noprint" id="nestPanel"><span class="pill">NEU / NESTING</span><h2>Platten-Nesting</h2><p class="section-lead">SVG/DXF-Bauteile lokal einlesen, platzsparend anordnen und anschliessend einzeln in die Kalkulation übernehmen.</p>
+<div class="nestrow"><input id="nestFiles" type="file" accept=".svg,.dxf,image/svg+xml" multiple style="max-width:330px"><button type="button" class="secondary" id="nestClear">Bauteile leeren</button></div>
+<div style="overflow-x:auto"><table id="nestParts"><thead><tr><th>Vorschau</th><th>Dateiname / Abmessung</th><th>Menge</th><th>Material CHF/Stk.</th><th>Laser Min./Stk.</th><th>Nachbearb. Min./Stk.</th><th>Entfernen</th></tr></thead><tbody id="nestRows"></tbody></table></div>
+<div class="nestgrid"><label>Plattenbreite mm<input id="nestW" type="number" min="1" value="600"></label><label>Plattenhöhe mm<input id="nestH" type="number" min="1" value="400"></label><label>Randabstand mm<input id="nestMargin" type="number" min="0" value="5"></label><label>Teileabstand mm<input id="nestGap" type="number" min="0" value="3"></label><label>Material CHF/m²<input id="nestPrice" type="number" min="0" step="0.01" value="22"></label><label>Lasergeschwindigkeit mm/min<input id="nestSpeed" type="number" min="1" value="350"></label><label>Drehung<select id="nestRotate"><option value="90">0° / 90° / 180° / 270°</option><option value="0">Keine Drehung</option><option value="15">Alle 15°</option><option value="10">Alle 10°</option><option value="5">Alle 5°</option><option value="2">Alle 2° (langsam)</option><option value="1">Alle 1° (sehr langsam)</option></select></label><label>Optimierung<select id="nestQuality"><option value="fast">Schnell</option><option value="normal" selected>Effizient</option><option value="max">Intensiv</option></select></label></div>
+<div class="nestrow"><button type="button" id="nestRun">Schachtelung optimieren</button><button type="button" id="nestCancel" class="danger" disabled hidden>■ Schachtelung abbrechen</button><button type="button" class="secondary" id="nestSvg" disabled>SVG exportieren</button><button type="button" class="secondary" id="nestDxf" disabled>DXF exportieren</button><button type="button" class="secondary" id="nestPdf" disabled>PDF Übersicht</button><button type="button" id="nestTransfer" disabled>→ In Kalkulation übernehmen</button></div>
+<div id="nestProgressPanel" hidden role="status" aria-live="polite" style="margin:14px 0;padding:16px;border:1px solid #cde1e5;border-radius:14px;background:#f4fafb">
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><strong id="nestProgressLabel">Optimierung wird vorbereitet …</strong><strong id="nestProgressPct">0 %</strong></div>
+<div role="progressbar" id="nestProgressBar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="height:13px;border-radius:20px;background:#dce9ec;margin-top:12px;overflow:hidden"><div id="nestProgressFill" style="height:100%;width:0%;background:linear-gradient(90deg,#087f95,#28b4a4);transition:width .18s;border-radius:20px"></div></div>
+<div id="nestProgressDetail" class="muted" style="margin-top:8px;font-size:12px">Bitte warten</div></div>
+<div id="nestStatus" role="status">Noch keine Schachtelung berechnet.</div><div id="nestPreview"></div>
+<p class="nestNote">Offline: alle Berechnungen erfolgen im Browser. Unterstützt werden SVG-Pfade, Polygone, Rechtecke, Kreise sowie DXF LINE, CIRCLE, ARC und LWPOLYLINE. Geschlossene Aussenkonturen werden geprüft. Innere Ausschnitte werden im Export beibehalten; die automatische Platzierung verwendet zur Sicherheit die äussere Kontur. Keine Garantie auf global optimales Nesting. DXF-Einheiten werden als Millimeter interpretiert; SVG benötigt eindeutige mm-Abmessungen oder eine mm-ViewBox. Prüfe die Laserdateien vor dem Schneiden in LightBurn.</p></section>
+<script>
+(()=>{'use strict';
+const el=id=>document.getElementById(id),NS='http://www.w3.org/2000/svg';let parts=[],layout=null,nonce=0;
+const E=(tag,attrs={},parent)=>{let n=document.createElementNS(NS,tag);for(let [k,v]of Object.entries(attrs))n.setAttribute(k,v);if(parent)parent.append(n);return n};
+const fmt=n=>Number(n.toFixed(3));const escXml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&apos;'}[c]));
+function dl(data,name,type){let a=document.createElement('a'),url=URL.createObjectURL(new Blob([data],{type}));a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),12000)}
+function polyArea(p){let a=0;for(let i=0;i<p.length;i++){let q=p[(i+1)%p.length];a+=p[i][0]*q[1]-q[0]*p[i][1]}return Math.abs(a/2)}
+function bbox(p){let xs=p.map(x=>x[0]),ys=p.map(x=>x[1]);return {x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)}}
+function normalizePoly(p){let b=bbox(p);return p.map(([x,y])=>[x-b.x,y-b.y])}
+function getMm(s){let m=String(s||'').trim().match(/^([\d.]+)\s*(mm|cm|in|px)?$/i);if(!m)return NaN;return Number(m[1])*({mm:1,cm:10,in:25.4,px:25.4/96}[m[2]?.toLowerCase()||'mm'])}
+function svgParse(text,name){let doc=new DOMParser().parseFromString(text,'image/svg+xml');if(doc.querySelector('parsererror'))throw Error('Ungültiges SVG');let root=doc.documentElement;if(root.localName!=='svg')throw Error('Kein SVG');root.querySelectorAll('script,foreignObject,iframe,image,use,style,animate,set,animateTransform').forEach(x=>x.remove());root.querySelectorAll('*').forEach(n=>[...n.attributes].forEach(a=>{if(/^on/i.test(a.name)||/href/i.test(a.name)||/url\(/i.test(a.value))n.removeAttribute(a.name)}));let vb=(root.getAttribute('viewBox')||'').split(/[\s,]+/).map(Number),w=getMm(root.getAttribute('width')),h=getMm(root.getAttribute('height'));if(!(w>0&&h>0)&&vb.length===4&&vb[2]>0&&vb[3]>0){w=vb[2];h=vb[3]}if(!(w>0&&h>0))throw Error('SVG braucht Breite/Höhe in mm oder eine mm-ViewBox');if(vb.length!==4||!(vb[2]>0&&vb[3]>0))vb=[0,0,w,h];let sx=w/vb[2],sy=h/vb[3],polys=[],paths=[];
+let tmp=document.createElementNS(NS,'svg');tmp.setAttribute('viewBox',vb.join(' '));tmp.setAttribute('width',w+'mm');tmp.setAttribute('height',h+'mm');tmp.style.cssText='position:absolute;left:-99999px;top:-99999px;visibility:hidden';let clone=root.cloneNode(true);while(clone.firstChild)tmp.append(clone.firstChild);document.body.append(tmp);
+let nodes=[...tmp.querySelectorAll('path,polygon,polyline,rect,circle,ellipse,line')];for(let n of nodes){let tag=n.localName;let path=document.createElementNS(NS,'path');let d='';if(tag==='path')d=n.getAttribute('d')||'';else if(tag==='rect'){let x=+n.getAttribute('x')||0,y=+n.getAttribute('y')||0,a=+n.getAttribute('width'),b=+n.getAttribute('height');d=`M${x} ${y}h${a}v${b}h${-a}Z`}else if(tag==='polygon'||tag==='polyline'){let ps=(n.getAttribute('points')||'').trim().replace(/,/g,' ').split(/\s+/).map(Number);d=ps.length>=4?'M'+ps[0]+' '+ps[1]+ps.slice(2).reduce((a,v,i)=>a+(i%2?' '+v:' L'+v),'')+(tag==='polygon'?'Z':''):''}else if(tag==='circle'||tag==='ellipse'){let x=+n.getAttribute('cx')||0,y=+n.getAttribute('cy')||0,rx=+(n.getAttribute(tag==='circle'?'r':'rx'))||0,ry=tag==='circle'?rx:(+n.getAttribute('ry')||0);d=`M${x-rx} ${y}a${rx} ${ry} 0 1 0 ${2*rx} 0a${rx} ${ry} 0 1 0 ${-2*rx} 0Z`}else if(tag==='line')d=`M${n.getAttribute('x1')||0} ${n.getAttribute('y1')||0}L${n.getAttribute('x2')||0} ${n.getAttribute('y2')||0}`;if(!d)continue;path.setAttribute('d',d);tmp.append(path);try{let len=path.getTotalLength(),count=Math.min(800,Math.max(16,Math.ceil(len/2))),pts=[];let mat=n.getCTM();for(let i=0;i<count;i++){let pt=path.getPointAtLength(len*i/count),v=mat?new DOMPoint(pt.x,pt.y).matrixTransform(mat):pt;pts.push([(v.x-vb[0])*sx,(v.y-vb[1])*sy])}if(polyArea(pts)>0.05){polys.push(pts);paths.push(pts)}}catch(e){}path.remove()}
+tmp.remove();if(!polys.length)throw Error('Keine geschlossenen Konturen erkannt');let outer=polys.reduce((a,b)=>polyArea(a)>polyArea(b)?a:b),b=bbox(outer);if(b.w<=0||b.h<=0)throw Error('Ungültige Kontur');let translated=polys.map(p=>p.map(([x,y])=>[x-b.x,y-b.y]));return {name,polys:translated,outer:normalizePoly(outer),w:b.w,h:b.h,qty:1};}
+function dxfParse(text,name){let l=text.replace(/\r/g,'').split('\n'),pairs=[];for(let i=0;i+1<l.length;i+=2)pairs.push([l[i].trim(),l[i+1].trim()]);let pol=[],current=null;for(let i=0;i<pairs.length;i++){let [code,val]=pairs[i];if(code!=='0'||!['LINE','LWPOLYLINE','CIRCLE','ARC'].includes(val))continue;let type=val,dat=[];for(let j=i+1;j<pairs.length&&pairs[j][0]!=='0';j++)dat.push(pairs[j]);i+=dat.length;let v=c=>dat.find(p=>p[0]===String(c))?.[1];if(type==='LINE'){let x=+v(10),y=+v(20),xx=+v(11),yy=+v(21);pol.push([[x,y],[xx,yy]])}if(type==='LWPOLYLINE'){let p=[],x=null;for(let [c,z]of dat){if(c==='10')x=+z;if(c==='20'&&x!==null){p.push([x,+z]);x=null}}if(p.length>=3)pol.push(p)}if(type==='CIRCLE'||type==='ARC'){let x=+v(10),y=+v(20),r=+v(40);if(r>0){let start=type==='CIRCLE'?0:+v(50),end=type==='CIRCLE'?360:+v(51);if(end<=start)end+=360;let n=Math.max(24,Math.ceil((end-start)*r*Math.PI/180/2));let p=[];for(let k=0;k<=n;k++){let a=(start+(end-start)*k/n)*Math.PI/180;p.push([x+r*Math.cos(a),y+r*Math.sin(a)])}if(type==='CIRCLE')pol.push(p)}}}let closed=pol.filter(p=>p.length>=3&&polyArea(p)>0.05);if(!closed.length)throw Error('DXF ohne geschlossene Polylinie oder Kreis');let outer=closed.reduce((a,b)=>polyArea(a)>polyArea(b)?a:b),b=bbox(outer);return {name,polys:closed.map(p=>p.map(([x,y])=>[x-b.x,y-b.y])),outer:normalizePoly(outer),w:b.w,h:b.h,qty:1}}
+function previewPart(p){let v=E('svg',{viewBox:`-2 -2 ${p.w+4} ${p.h+4}`,width:1200,height:900,preserveAspectRatio:'xMidYMid meet'});p.polys.forEach(poly=>E('polygon',{points:poly.map(q=>q.map(fmt).join(',')).join(' '),fill:'none',stroke:'#000000','stroke-width':Math.max(.12,Math.min(p.w,p.h)/280)},v));return new XMLSerializer().serializeToString(v)}
+function refresh(){let body=el('nestRows');body.replaceChildren();parts.forEach((p,i)=>{let tr=document.createElement('tr'),td=document.createElement('td'),img=document.createElement('img');img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(previewPart(p));td.append(img);tr.append(td);td=document.createElement('td');td.textContent=p.name+' · '+fmt(p.w)+' × '+fmt(p.h)+' mm';tr.append(td);td=document.createElement('td');let inp=document.createElement('input');inp.type='number';inp.min='1';inp.step='1';inp.value=p.qty;inp.onchange=()=>{p.qty=Math.max(1,Math.floor(+inp.value||1));invalidate()};td.append(inp);tr.append(td);for(let [key,placeholder] of [['materialOverride','auto'],['minutesOverride','auto'],['finishingOverride','0']]){td=document.createElement('td');let field=document.createElement('input');field.type='number';field.min='0';field.step='0.01';field.placeholder=placeholder;field.value=p[key]??'';field.title='Leer = automatisch berechnen';field.onchange=()=>{p[key]=field.value===''?null:Math.max(0,+field.value||0);invalidate()};td.append(field);tr.append(td)}td=document.createElement('td');let b=document.createElement('button');b.textContent='×';b.className='danger';b.onclick=()=>{parts.splice(i,1);invalidate();refresh()};td.append(b);tr.append(td);body.append(tr)})}
+function invalidate(){layout=null;['nestSvg','nestDxf','nestPdf','nestTransfer'].forEach(id=>el(id).disabled=true);el('nestPreview').replaceChildren()}
+el('nestFiles').onchange=async e=>{let errors=[];for(let f of e.target.files){try{let t=await f.text();let p=f.name.toLowerCase().endsWith('.dxf')?dxfParse(t,f.name):svgParse(t,f.name);p.id=++nonce;parts.push(p)}catch(err){errors.push(f.name+': '+err.message)}}e.target.value='';invalidate();refresh();el('nestStatus').textContent=errors.length?errors.join(' | '):parts.length+' Bauteile importiert.'};el('nestClear').onclick=()=>{if(parts.length&&!confirm('Alle Nesting-Bauteile entfernen?'))return;parts=[];invalidate();refresh();el('nestStatus').textContent='Nesting geleert.'};
+function rot(poly,a){let r=a*Math.PI/180,c=Math.cos(r),s=Math.sin(r);return poly.map(([x,y])=>[x*c-y*s,x*s+y*c])}
+function transformPart(p,a){let outer=rot(p.outer,a),b=bbox(outer);return {outer:outer.map(([x,y])=>[x-b.x,y-b.y]),polys:p.polys.map(q=>rot(q,a).map(([x,y])=>[x-b.x,y-b.y])),w:b.w,h:b.h,a}}
+function inside(pt,p){let x=pt[0],y=pt[1],c=false;for(let i=0,j=p.length-1;i<p.length;j=i++){let a=p[i],b=p[j];if(((a[1]>y)!==(b[1]>y))&&(x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0]))c=!c}return c}
+function cross(a,b,c){return (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])}
+function intersect(a,b,c,d){return cross(a,b,c)*cross(a,b,d)<-1e-7&&cross(c,d,a)*cross(c,d,b)<-1e-7}
+function overlap(A,B){let aa=A.poly,bb=B.poly;for(let i=0;i<aa.length;i++)for(let j=0;j<bb.length;j++)if(intersect(aa[i],aa[(i+1)%aa.length],bb[j],bb[(j+1)%bb.length]))return true;return inside(aa[0],bb)||inside(bb[0],aa)}
+function placeShape(t,x,y,part){return {x,y,w:t.w,h:t.h,poly:t.outer.map(([a,b])=>[a+x,b+y]),polys:t.polys.map(p=>p.map(([a,b])=>[a+x,b+y])),part,a:t.a}}
+function canFit(c,placed,gap){for(let b of placed){if(c.x+c.w+gap<=b.x||b.x+b.w+gap<=c.x||c.y+c.h+gap<=b.y||b.y+b.h+gap<=c.y)continue;if(overlap(c,b))return false;let near=false;for(let pt of c.poly)for(let i=0;i<b.poly.length;i++){let a=b.poly[i],z=b.poly[(i+1)%b.poly.length],dx=z[0]-a[0],dy=z[1]-a[1],u=Math.max(0,Math.min(1,((pt[0]-a[0])*dx+(pt[1]-a[1])*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(pt[0]-a[0]-u*dx,pt[1]-a[1]-u*dy)<gap-.001){near=true;break}if(near)break}if(near)return false;for(let pt of b.poly)for(let i=0;i<c.poly.length;i++){let a=c.poly[i],z=c.poly[(i+1)%c.poly.length],dx=z[0]-a[0],dy=z[1]-a[1],u=Math.max(0,Math.min(1,((pt[0]-a[0])*dx+(pt[1]-a[1])*dy)/(dx*dx+dy*dy||1)));if(Math.hypot(pt[0]-a[0]-u*dx,pt[1]-a[1]-u*dy)<gap-.001)return false}}return true}
+let nestingCancelRequested=false;
+async function run(){let W=+el('nestW').value,H=+el('nestH').value,m=+el('nestMargin').value,g=+el('nestGap').value;if(!parts.length)throw Error('Zuerst Bauteile importieren');if(!(W>0&&H>0&&m>=0&&g>=0&&W>2*m&&H>2*m))throw Error('Plattengrösse / Abstände prüfen');let angles=el('nestRotate').value==='0'?[0]:!isNaN(+el('nestRotate').value)&&+el('nestRotate').value>0?Array.from({length:360/(+el('nestRotate').value)},(_,i)=>i*(+el('nestRotate').value)):[0,90,180,270],q=el('nestQuality').value,tries=q==='fast'?1:q==='normal'?3:7,all=parts.flatMap(p=>Array.from({length:p.qty},()=>p));if(all.length>400)throw Error('Maximal 400 Bauteile pro Optimierung');let best=null,done=0,total=tries*all.length,workCount=0;
+const checkCancel=async()=>{if(++workCount%750===0){await new Promise(resolve=>setTimeout(resolve,0));if(nestingCancelRequested)throw new Error("NESTING_CANCELLED")}};
+const progress=(pct,label,detail)=>{let v=Math.max(0,Math.min(100,Math.round(pct)));el('nestProgressPct').textContent=v+' %';el('nestProgressFill').style.width=v+'%';el('nestProgressBar').setAttribute('aria-valuenow',v);el('nestProgressLabel').textContent=label;el('nestProgressDetail').textContent=detail};
+progress(0,'Schachtelung läuft','Berechnung startet …');
+await new Promise(resolve=>setTimeout(resolve,25));
+for(let pass=0;pass<tries;pass++){
+ if(nestingCancelRequested)throw new Error("NESTING_CANCELLED");
+ // Mix different part types instead of filling each sheet with a single type.
+ let types=[...parts].sort((a,b)=>pass%3===0?polyArea(b.outer)-polyArea(a.outer):pass%3===1?Math.max(b.w,b.h)-Math.max(a.w,a.h):a.name.localeCompare(b.name));
+ if(pass>=3)types=types.slice(pass%types.length).concat(types.slice(0,pass%types.length));
+ let remaining=new Map(types.map(p=>[p.id,p.qty])),ordered=[];
+ while(ordered.length<all.length){for(let p of types){if(remaining.get(p.id)>0){ordered.push(p);remaining.set(p.id,remaining.get(p.id)-1)}}}
+ let sheets=[];
+ for(let p of ordered){
+  if(nestingCancelRequested)throw new Error("NESTING_CANCELLED");
+  if(done%2===0){progress(100*done/total,'Schachtelung läuft',`Durchlauf ${pass+1} von ${tries} · Bauteil ${done%all.length+1} von ${all.length}`);await new Promise(resolve=>setTimeout(resolve,0))}
+  let variants=angles.map(a=>transformPart(p,a)).filter(t=>t.w<=W-2*m+1e-7&&t.h<=H-2*m+1e-7);
+  if(!variants.length)throw Error(p.name+' passt bei keiner erlaubten Drehung auf die Platte');
+  // Prefer a position on any already-used sheet. Only open a new sheet if necessary.
+  let chosen=null;
+  for(let si=0;si<=sheets.length;si++){
+   await checkCancel();
+   let placed=sheets[si]||[];
+   let candidates=[[m,m]];
+   for(let b of placed){
+    candidates.push([b.x+b.w+g,b.y],[b.x,b.y+b.h+g],[b.x+b.w+g,m],[m,b.y+b.h+g]);
+    // Also test the gaps to the LEFT and ABOVE existing shapes.
+    
+    for(let z of placed)candidates.push([b.x+b.w+g,z.y+z.h+g],[z.x+z.w+g,b.y+b.h+g]);
+   }
+   // Shape-aware candidate points: align vertices to the existing outlines,
+   // allowing parts to nest in concavities rather than only bounding boxes.
+   for(let t of variants){
+    await checkCancel();
+    let pts=[...candidates];for(let b of placed){pts.push([b.x-t.w-g,b.y],[b.x,b.y-t.h-g],[b.x+b.w+g,b.y+b.h-t.h],[b.x+b.w-t.w,b.y+b.h+g]);}
+    if(placed.length){
+     let anchors=t.outer.filter((_,i)=>i%Math.max(1,Math.ceil(t.outer.length/20))===0);
+     for(let b of placed){
+      let edge=b.poly.filter((_,i)=>i%Math.max(1,Math.ceil(b.poly.length/30))===0);
+      for(let v of edge)for(let u of anchors){if(pts.length>4500)break;pts.push([v[0]-u[0]+g,v[1]-u[1]],[v[0]-u[0]-g,v[1]-u[1]],[v[0]-u[0],v[1]-u[1]+g],[v[0]-u[0],v[1]-u[1]-g])}
+     }
+    }
+    // Search unused strips as well as polygon vertices; essential for mixed parts.
+    const step=Math.max(3,Math.min(12,Math.min(t.w,t.h)/6));
+    if(placed.length && pts.length<9000 && (W/step)*(H/step)<2600){
+      for(let yy=m;yy+t.h<=H-m+1e-7;yy+=step)
+        for(let xx=m;xx+t.w<=W-m+1e-7;xx+=step)
+          pts.push([xx,yy]);
+    }
+    let seen=new Set();
+    for(let [x,y]of pts){
+     await checkCancel();
+     x=fmt(x);y=fmt(y);let key=x+','+y;if(seen.has(key))continue;seen.add(key);
+     if(x<m-1e-7||y<m-1e-7||x+t.w>W-m+1e-7||y+t.h>H-m+1e-7)continue;
+     let c=placeShape(t,x,y,p);if(!canFit(c,placed,g))continue;
+     // Bottom-left packing with mild preference for occupying narrow leftover spaces.
+     let score=(y+t.h)*W+(x+t.w)*0.35 + (Math.max(x+t.w,y+t.h)*0.001);
+     if(!chosen||score<chosen.score)chosen={si,c,score};
+    }
+   }
+   if(chosen)break;
+  }
+  if(!chosen)throw Error('Kein Platz für '+p.name);
+  if(!sheets[chosen.si])sheets.push([]);
+  sheets[chosen.si].push(chosen.c);done++;
+ }
+ let score=sheets.length*1e9+sheets.reduce((a,sh)=>a+Math.max(...sh.map(p=>p.y+p.h))*W,0);
+ if(!best||score<best.score)best={sheets,score};
+}
+progress(100,'Optimierung abgeschlossen',`${best.sheets.length} Platte(n) · ${all.length} Teile angeordnet`);layout={...best,W,H,m,g};renderLayout();['nestSvg','nestDxf','nestPdf','nestTransfer'].forEach(id=>el(id).disabled=false)}
+function renderLayout(){let area=el('nestPreview');area.replaceChildren();let totalArea=parts.reduce((a,p)=>a+polyArea(p.outer)*p.qty,0),util=100*totalArea/(layout.sheets.length*layout.W*layout.H);el('nestStatus').textContent=`${layout.sheets.length} Platte(n) · ${layout.sheets.reduce((a,s)=>a+s.length,0)} Teile · ca. ${util.toFixed(1)} % Netto-Konturfläche / Plattenfläche (Ausschnitte nicht abgezogen)`;layout.sheets.forEach((sh,i)=>{let title=document.createElement('div');title.textContent='Platte '+(i+1)+' / '+layout.sheets.length;area.append(title);let svg=E('svg',{viewBox:`0 0 ${layout.W} ${layout.H}`,width:layout.W,height:layout.H,xmlns:NS});E('rect',{x:0,y:0,width:layout.W,height:layout.H,fill:'#fff',stroke:'#475569','stroke-width':Math.max(1,layout.W/400)},svg);for(let [j,p]of sh.entries()){for(let poly of p.polys)E('polygon',{points:poly.map(q=>q.map(fmt).join(',')).join(' '),fill:'none',stroke:'#087f95','stroke-width':Math.max(.2,layout.W/1400)},svg);E('text',{x:fmt(p.x+p.w/2),y:fmt(p.y+p.h/2),'text-anchor':'middle','font-size':Math.max(2,Math.min(10,p.w/7)),fill:'#0f172a'},svg).textContent=String(j+1)}area.append(svg)})}
+function sheetSvg(sh){let out=[`<svg xmlns="${NS}" width="${layout.W}mm" height="${layout.H}mm" viewBox="0 0 ${layout.W} ${layout.H}">`];for(let p of sh)for(let poly of p.polys)out.push(`<polygon points="${poly.map(q=>q.map(fmt).join(',')).join(' ')}" fill="none" stroke="#000" stroke-width="0.1"/>`);return out.join('\n')+'</svg>'}
+function dxfSheet(sh){let a=['0','SECTION','2','HEADER','9','$INSUNITS','70','4','0','ENDSEC','0','SECTION','2','ENTITIES'];for(let p of sh)for(let poly of p.polys){a.push('0','LWPOLYLINE','8','CUT','90',String(poly.length),'70','1');for(let [x,y]of poly)a.push('10',String(fmt(x)),'20',String(fmt(layout.H-y)))}a.push('0','ENDSEC','0','EOF');return a.join('\n')+'\n'}
+function pdfOverview(){let pages=layout.sheets,objs=[null],add=x=>(objs.push(x),objs.length-1),font=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'),pagesId=add(''),kids=[];let safe=s=>String(s).replace(/[^\x20-\x7e]/g,'?').replace(/[\\()]/g,' ');for(let [i,sh]of pages.entries()){let scale=Math.min(500/layout.W,610/layout.H),ox=48,oy=160,ops=['BT /F1 17 Tf 48 795 Td (Nesting - Platte '+(i+1)+' / '+pages.length+') Tj ET','BT /F1 10 Tf 48 770 Td ('+safe(layout.W+' x '+layout.H+' mm')+') Tj ET'];ops.push('0 0 0 RG .3 w');ops.push(`${ox} ${842-oy-layout.H*scale} ${layout.W*scale} ${layout.H*scale} re S`);for(let p of sh)for(let poly of p.polys){if(!poly.length)continue;ops.push(`${fmt(ox+poly[0][0]*scale)} ${fmt(842-oy-poly[0][1]*scale)} m`);for(let k=1;k<poly.length;k++)ops.push(`${fmt(ox+poly[k][0]*scale)} ${fmt(842-oy-poly[k][1]*scale)} l`);ops.push('h S')}let lines=['Stueckliste:'];for(let p of parts)lines.push(p.name+'  x '+p.qty);let yy=120;for(let t of lines.slice(0,20)){ops.push(`BT /F1 9 Tf 48 ${yy} Td (${safe(t).slice(0,95)}) Tj ET`);yy-=12}let content=ops.join('\n'),cid=add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`),pid=add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${cid} 0 R >>`);kids.push(pid+' 0 R')}objs[pagesId]=`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;let root=add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`),out='%PDF-1.4\n',offset=[0];for(let i=1;i<objs.length;i++){offset[i]=out.length;out+=`${i} 0 obj\n${objs[i]}\nendobj\n`}let xref=out.length;out+=`xref\n0 ${objs.length}\n0000000000 65535 f \n`;for(let i=1;i<objs.length;i++)out+=String(offset[i]).padStart(10,'0')+' 00000 n \n';out+=`trailer\n<< /Size ${objs.length} /Root ${root} 0 R >>\nstartxref\n${xref}\n%%EOF`;return new Uint8Array([...out].map(c=>c.charCodeAt(0)&255))}
+function lengthPoly(poly){let n=0;for(let i=0;i<poly.length;i++){let a=poly[i],b=poly[(i+1)%poly.length];n+=Math.hypot(a[0]-b[0],a[1]-b[1])}return n}
+async function transfer(){if(!layout)return;let existing=positions.filter(p=>p.nestingId);if(existing.length&&!confirm('Bereits übernommene Nesting-Positionen ersetzen? Manuell erstellte Positionen bleiben erhalten.'))return;let cost=layout.sheets.length*layout.W*layout.H/1e6*(+el('nestPrice').value||0),areas=parts.map(p=>polyArea(p.outer)*p.qty),areaSum=areas.reduce((a,b)=>a+b,0)||1,rate=Number(el('hourly').value)||35,speed=Math.max(1,+el('nestSpeed').value||350),markup=1+(Number(el('markup').value)||0)/100,round=Number(el('round').value)||0;let created=[];for(let [i,p]of parts.entries()){let qty=p.qty,material=Math.round((p.materialOverride??(cost*areas[i]/areaSum/qty))*100)/100,minutes=Math.round((p.minutesOverride??(p.polys.reduce((a,poly)=>a+lengthPoly(poly),0)/speed))*100)/100,finishMinutes=Math.round((p.finishingOverride??0)*100)/100,finishCost=finishMinutes*(Number(el('laborRate').value)||60)/60,unit=(material+minutes*rate/60)*markup+finishCost;if(round>0)unit=Math.ceil(unit/round-1e-9)*round;unit=Math.round(unit*100)/100;let f=new File([previewPart(p)],p.name.replace(/\.[^.]+$/,'.svg'),{type:'image/svg+xml'}),img=await imageForOffer(f);created.push({name:p.name,qty,unit,material,laser:minutes*rate/60,setup:0,finishing:finishCost,minutes,finishingMinutes:finishMinutes,width:p.w,height:p.h,info:[`Materialanteil CHF ${material.toFixed(2)} / Stk.`,`Schnittlaenge ${p.polys.reduce((a,poly)=>a+lengthPoly(poly),0).toFixed(0)} mm / Stk.`,`Laserzeit ca. ${minutes.toFixed(2)} min / Stk.`],attachments:[p.name],offerImages:img?[img]:[],nestingId:p.id,templateName:'Nesting-Import'})}positions=positions.filter(p=>!p.nestingId).concat(created);render();document.querySelector('.summary-panel')?.scrollIntoView({behavior:'smooth'});el('nestStatus').textContent=`${created.length} Bauteilpositionen in die Kalkulation übernommen. Materialkosten auf Basis der belegten Platten verteilt.`}
+el('nestCancel').onclick=()=>{nestingCancelRequested=true;el('nestCancel').disabled=true;el('nestProgressLabel').textContent='Abbruch wird ausgeführt …';el('nestProgressDetail').textContent='Berechnung wird sicher beendet';};
+el('nestRun').onclick=async()=>{let b=el('nestRun'),cancel=el('nestCancel'),panel=el('nestProgressPanel');nestingCancelRequested=false;b.disabled=true;cancel.hidden=false;cancel.disabled=false;panel.hidden=false;el('nestProgressPct').textContent='0 %';el('nestProgressFill').style.width='0%';try{el('nestStatus').textContent='Optimierung läuft …';await run()}catch(e){if(e.message==='NESTING_CANCELLED'){el('nestProgressLabel').textContent='Schachtelung abgebrochen';el('nestProgressDetail').textContent='Keine neue Schachtelung gespeichert. Du kannst die Einstellungen ändern und neu starten.';el('nestStatus').textContent='Optimierung durch Benutzer abgebrochen.'}else{invalidate();el('nestProgressLabel').textContent='Optimierung fehlgeschlagen';el('nestProgressDetail').textContent=e.message;el('nestStatus').textContent='Fehler: '+e.message}}finally{b.disabled=false;cancel.disabled=true;cancel.hidden=true}};el('nestSvg').onclick=()=>layout?.sheets.forEach((s,i)=>dl(sheetSvg(s),'Nesting_Platte_'+(i+1)+'.svg','image/svg+xml'));el('nestDxf').onclick=()=>layout?.sheets.forEach((s,i)=>dl(dxfSheet(s),'Nesting_Platte_'+(i+1)+'.dxf','application/dxf'));el('nestPdf').onclick=()=>layout&&dl(pdfOverview(),'Nesting_Uebersicht.pdf','application/pdf');el('nestTransfer').onclick=()=>transfer().catch(e=>alert('Übernahme fehlgeschlagen: '+e.message));
+})();
+</script>
+<style>
+#laserTabs{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid #dbe4e7;padding:9px max(12px,calc((100vw - 1100px)/2));display:flex;gap:7px;overflow-x:auto;box-shadow:0 2px 8px #00000012}
+#laserTabs button{flex:0 0 auto;border-radius:9px;padding:11px 13px;margin:0;font-size:13px;white-space:nowrap;background:#eaf0f2;color:#173b42;border:1px solid #dce8e9}
+#laserTabs button.active{background:#087f95;color:white;border-color:#087f95}
+body.laserTabsReady .laserTabPanel{display:none!important}
+body.laserTabsReady .laserTabPanel.laserTabActive{display:block!important}
+#nestParts{min-width:790px}#nestParts td input{min-width:65px;max-width:100px!important}
+#nestPanel #nestPreview{max-width:100%}
+#laserEditDialog{border:0;border-radius:15px;padding:24px;max-width:min(560px,94vw);width:100%;box-shadow:0 18px 80px #0005}
+#laserEditDialog::backdrop{background:#0008}
+#laserEditDialog .editGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+#laserEditDialog label{font-size:13px;display:flex;flex-direction:column;gap:4px}
+#laserEditDialog input{width:100%;box-sizing:border-box}
+#laserEditDialog .editActions{display:flex;gap:10px;margin-top:20px}
+#laserEditDialog button{margin:0}
+@media print{#laserTabs{display:none!important}}
+</style>
+<nav id="laserTabs" class="noprint" aria-label="Laser-App Bereiche"></nav>
+<dialog id="laserEditDialog"><form method="dialog" id="laserEditForm"><h2>Position bearbeiten</h2><p class="muted">Änderungen gelten für diese Kalkulationsposition. Das Nesting bleibt unverändert.</p><div class="editGrid">
+<label style="grid-column:1/-1">Bezeichnung<input id="editName" required></label>
+<label>Menge<input id="editQty" type="number" min="1" step="1" required></label>
+<label>Material CHF / Stück<input id="editMaterial" type="number" min="0" step="0.01"></label>
+<label>Optionaler Materialpreis CHF / m²<input id="editSqm" type="number" min="0" step="0.01" placeholder="Leer = Materialpreis pro Stück"></label>
+<label>Laserzeit Minuten / Stück<input id="editMinutes" type="number" min="0" step="0.01"></label>
+<label>Nachbearbeitung Minuten / Stück<input id="editFinMinutes" type="number" min="0" step="0.01"></label>
+<label>Einzelpreis CHF (direkt editierbar)<input id="editUnit" type="number" min="0" step="0.01" required></label>
+</div><div class="editActions"><button type="button" id="editRecalculate" class="secondary">Preis neu berechnen</button><button type="submit">Speichern</button><button type="button" id="editCancel" class="secondary">Abbrechen</button></div></form></dialog>
+<script>
+(()=>{'use strict';
+const sections=[...document.querySelectorAll('main > section.panel')];
+const nest=document.getElementById('nestPanel');if(nest){document.querySelector('main')?.append(nest)}
+const tabs=[['Einstellungen',sections[0]],['Kalkulation',sections[1]],['Übersicht',sections[2]],['Dokumente',sections[3]],['Nesting',nest]].filter(x=>x[1]);
+const nav=document.getElementById('laserTabs');let active='Kalkulation';
+function activate(name){active=name;for(let [label,section] of tabs)section.classList.toggle('laserTabActive',label===name);for(let b of nav.querySelectorAll('button')){b.classList.toggle('active',b.dataset.tab===name);b.setAttribute('aria-selected',String(b.dataset.tab===name))}window.scrollTo({top:0,behavior:'instant'})}
+for(let [name,section] of tabs){section.classList.add('laserTabPanel');let b=document.createElement('button');b.type='button';b.textContent=name;b.dataset.tab=name;b.onclick=()=>activate(name);nav.append(b)}
+document.querySelector('header')?.after(nav);document.body.classList.add('laserTabsReady');activate(active);
+window.laserActivateTab=activate;
+const dialog=document.getElementById('laserEditDialog');let editIndex=-1;
+const field=id=>document.getElementById(id);
+const two=v=>Math.max(0,Math.round((Number(String(v).replace(',','.'))||0)*100+1e-8)/100);
+const fix=id=>{const e=field(id);e.value=two(e.value).toFixed(2)};
+for(const id of ['editMaterial','editSqm','editMinutes','editFinMinutes','editUnit']){const e=field(id);e.addEventListener('change',()=>{if(id==='editSqm'&&!e.value.trim())return;fix(id)});e.addEventListener('blur',()=>{if(id==='editSqm'&&!e.value.trim())return;fix(id)})}
+function sqmMaterial(){let v=field('editSqm').value.trim();if(!v)return null;const p=positions[editIndex];if(!p)return null;const area=Math.max(0,Number(p.width)||0)*Math.max(0,Number(p.height)||0)/1e6;return two(two(v)*area)}
+field('editSqm').addEventListener('change',()=>{let m=sqmMaterial();if(m!==null)field('editMaterial').value=m.toFixed(2)});
+
+function editPosition(i){let p=positions[i];if(!p)return;editIndex=i;field('editName').value=p.name||'';field('editQty').value=p.qty||1;field('editMaterial').value=two(p.material).toFixed(2);field('editSqm').value=p.sqmPrice==null?'':two(p.sqmPrice).toFixed(2);field('editMinutes').value=two(p.minutes).toFixed(2);field('editFinMinutes').value=two(p.finishingMinutes).toFixed(2);field('editUnit').value=Number(p.unit||0).toFixed(2);dialog.showModal()}
+field('editRecalculate').onclick=()=>{let mat=sqmMaterial()??two(field('editMaterial').value),mins=two(field('editMinutes').value),fin=two(field('editFinMinutes').value),rate=Math.max(0,+field('hourly').value||35),labor=Math.max(0,+field('laborRate').value||60),markup=1+Math.max(0,+field('markup').value||0)/100;field('editUnit').value=((mat+mins*rate/60)*markup+fin*labor/60).toFixed(2)};
+field('editCancel').onclick=()=>dialog.close();
+field('laserEditForm').onsubmit=e=>{e.preventDefault();let p=positions[editIndex];if(!p)return;Object.assign(p,{name:field('editName').value.trim()||p.name,qty:Math.max(1,Math.floor(+field('editQty').value||1)),material:sqmMaterial()??two(field('editMaterial').value),sqmPrice:field('editSqm').value.trim()?two(field('editSqm').value):null,minutes:two(field('editMinutes').value),finishingMinutes:two(field('editFinMinutes').value),unit:two(field('editUnit').value)});p.laser=p.minutes*(+field('hourly').value||35)/60;p.finishing=p.finishingMinutes*(+field('laborRate').value||60)/60;if(p.nestingId){p.info=[`Materialanteil CHF ${p.material.toFixed(2)} / Stk.`,`Laserzeit ca. ${p.minutes.toFixed(2)} min / Stk.`,`Nachbearbeitung ${p.finishingMinutes.toFixed(2)} min / Stk.`]}dialog.close();render();if(typeof scheduleAutosave==='function')scheduleAutosave()};
+const oldRender=render;render=function(){oldRender();document.querySelectorAll('#items tr').forEach((tr,i)=>{let td=tr.lastElementChild;if(!td)return;let b=document.createElement('button');b.type='button';b.className='secondary';b.textContent='✎';b.title='Position bearbeiten';b.onclick=()=>editPosition(i);td.prepend(b);let p=positions[i];if(p?.offerImages?.length){let img=document.createElement('img');img.src='data:image/jpeg;base64,'+p.offerImages[0].data;img.alt='Bauteilvorschau';img.style.cssText='width:85px;height:55px;object-fit:contain;display:block;margin-top:5px';tr.firstElementChild.append(img)}})};
+const oldTransfer=document.getElementById('nestTransfer').onclick;
+document.getElementById('nestTransfer').onclick=async()=>{await oldTransfer();activate('Übersicht')};
+})();
+</script>
+</body></html>
