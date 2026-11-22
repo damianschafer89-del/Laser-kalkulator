@@ -1385,22 +1385,6 @@ function swissQrPayload(amount){
  const message=qrAscii($('paymentReference').value||ensureDocumentNumber()).slice(0,140);
  return ['SPC','0200','1',iban,...creditor,'','','','','','','','','',Number(amount).toFixed(2),'CHF',...debtor,'NON','',message,'EPD'].join('\n');
 }
-function addQrPaymentPage(amount){
- const payload=swissQrPayload(amount),qr=new QRCodeOffline(0,1);qr.addData(payload);qr.make();
- newpage();y=120;
- line('ZAHLTEIL / SWISS QR',margin,y,14,true,dark);y+=20;
- line('Zahlungsinformationen zur Rechnung '+ensureDocumentNumber(),margin,y,10);
- const size=140,n=qr.getModuleCount(),step=size/n,x=70,top=190;
- rect(x-5,top-5,size+10,size+10,[1,1,1]);
- for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))rect(x+c*step,top+r*step,step+.06,step+.06,[0,0,0]);
- // Swiss cross emblem in QR center
- const mid=x+size/2,cy=top+size/2;
- rect(mid-9,cy-9,18,18,[1,1,1]);rect(mid-7,cy-7,14,14,[0,0,0]);
- rect(mid-1.1,cy-5,2.2,10,[1,1,1]);rect(mid-5,cy-1.1,10,2.2,[1,1,1]);
- const addr=swissAddress($('sender').value),deb=swissAddress($('customer').value);
- let yy=194;for(let t of ['Konto / Zahlbar an',$('iban').value,...addr.slice(1,7).filter(Boolean),'Betrag','CHF '+amount.toFixed(2),'Zahlbar durch',...deb.slice(1,7).filter(Boolean)]){line(t,265,yy,10);yy+=17}
- line('QR-Zahlteil: Angaben vor Verwendung pruefen.',margin,395,9,false,[.4,.4,.4]);
-}
 
 function pdfBytes(){
  if(!positions.length)throw Error('Bitte zuerst eine Position hinzufügen.');
@@ -1442,6 +1426,24 @@ function pdfBytes(){
  if($('documentType').value==='Rechnung'){if(y>700)newpage();line('ZAHLUNGSINFORMATIONEN',margin,y,9,true,accent);y+=18;for(let t of ['IBAN: '+($('iban').value.trim()||'Nicht angegeben'),'Zahlbar innert '+(num('paymentDays')||30)+' Tagen','Zahlungszweck: '+($('paymentReference').value.trim()||ensureDocumentNumber())]){line(t,margin,y,10);y+=16}y+=10}
  let closing=$('closingText').value.trim();if(closing){if(y>755)newpage();for(let t of wrap(closing,90)){line(t,margin,y,10);y+=16}y+=12}
  let notes=$('notes').value.trim();if(notes){if(y>730)newpage();line('BEMERKUNGEN',margin,y,9,true,accent);y+=19;for(let paragraph of notes.split('\n'))for(let part of wrap(paragraph,95)){if(y>780)newpage();line(part,margin,y,10);y+=15}}
+
+ function addQrPaymentPage(amount){
+  const payload=swissQrPayload(amount),qr=new QRCodeOffline(0,1);qr.addData(payload);qr.make();
+  newpage();y=120;
+  line('ZAHLTEIL / SWISS QR',margin,y,14,true,dark);y+=20;
+  line('Zahlungsinformationen zur Rechnung '+ensureDocumentNumber(),margin,y,10);
+  const size=140,n=qr.getModuleCount(),step=size/n,x=70,top=190;
+  rect(x-5,top-5,size+10,size+10,[1,1,1]);
+  for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(qr.isDark(r,c))rect(x+c*step,top+r*step,step+.06,step+.06,[0,0,0]);
+  // Swiss cross emblem in QR center
+  const mid=x+size/2,cy=top+size/2;
+  rect(mid-9,cy-9,18,18,[1,1,1]);rect(mid-7,cy-7,14,14,[0,0,0]);
+  rect(mid-1.1,cy-5,2.2,10,[1,1,1]);rect(mid-5,cy-1.1,10,2.2,[1,1,1]);
+  const addr=swissAddress($('sender').value),deb=swissAddress($('customer').value);
+  let yy=194;for(let t of ['Konto / Zahlbar an',$('iban').value,...addr.slice(1,7).filter(Boolean),'Betrag','CHF '+amount.toFixed(2),'Zahlbar durch',...deb.slice(1,7).filter(Boolean)]){line(t,265,yy,10);yy+=17}
+  line('QR-Zahlteil: Angaben vor Verwendung pruefen.',margin,395,9,false,[.4,.4,.4]);
+ }
+ 
  if($('documentType').value==='Rechnung')addQrPaymentPage(net+tax);
  pages.push(ops.join('\n'));allPageImages.push(pageImages);
  let objs=[null],add=s=>{objs.push(s);return objs.length-1};
@@ -1478,7 +1480,7 @@ const DEFAULT_IBAN='CH65 0076 8300 1579 5640 9';
 function syncIbanChoice(){if($('ibanChoice').value==='default')$('iban').value=DEFAULT_IBAN;$('iban').readOnly=$('ibanChoice').value==='default'}
 $('ibanChoice').addEventListener('change',()=>{if($('ibanChoice').value==='other')$('iban').value='';syncIbanChoice();scheduleAutosave()});
 $('iban').addEventListener('input',()=>{if($('ibanChoice').value==='default'&&$('iban').value!==DEFAULT_IBAN)$('ibanChoice').value='other'});
-function restoreAutosave(){try{let d=JSON.parse(localStorage.getItem(AUTOSAVE_KEY));if(!d){$('sender').value=DEFAULT_SENDER;syncIbanChoice();return;}restoring=true;if(Array.isArray(d.templates)&&d.templates.length){templates=d.templates;activeTemplate=d.activeTemplate||templates[0].id;persistTemplates();populateTemplates()}Object.entries(d.fields||{}).forEach(([k,v])=>{if($(k))$(k).value=v});if(!$('sender').value.trim())$('sender').value=DEFAULT_SENDER;if(!d.fields?.ibanChoice){$('ibanChoice').value=(!d.fields?.iban||d.fields.iban.replace(/\s/g,'')===DEFAULT_IBAN.replace(/\s/g,''))?'default':'other';}syncIbanChoice();positions=Array.isArray(d.positions)?d.positions:[];logoData=d.logoData||null;updateLogoPreview();closingTexts={...defaultClosings,...(d.closingTexts||{})};syncDocumentType();render();restoring=false}catch(e){restoring=false;console.warn('Autosave nicht lesbar',e)}}
+function restoreAutosave(){try{let d=JSON.parse(localStorage.getItem(AUTOSAVE_KEY));if(!d){$('sender').value=DEFAULT_SENDER;syncIbanChoice();return;}restoring=true;if(Array.isArray(d.templates)&&d.templates.length){templates=d.templates;activeTemplate=d.activeTemplate||templates[0].id;persistTemplates();populateTemplates()}Object.entries(d.fields||{}).forEach(([k,v])=>{if($(k))$(k).value=v});if(!$('sender').value.trim())$('sender').value=DEFAULT_SENDER;if(!d.fields?.ibanChoice){$('ibanChoice').value=(!d.fields?.iban||d.fields.iban.replace(/\s/g,'')===DEFAULT_IBAN.replace(/\s/g,''))?'default':'other';}syncIbanChoice();positions=Array.isArray(d.positions)?d.positions:[];logoData=d.logoData||null;updateLogoPreview();closingTexts={...defaultClosings,...(d.closingTexts||{})};syncDocumentType();render();restoring=false}catch(e){restoring=false;$('sender').value=DEFAULT_SENDER;console.warn('Autosave nicht lesbar',e)}}
 const defaultClosings={Offerte:'Vielen Dank für die Anfrage.',Auftragsbestätigung:'Vielen Dank für den Auftrag.',Rechnung:'Vielen Dank für den Auftrag.'};
 let closingTexts={...defaultClosings},lastDocType='Offerte';
 function syncDocumentType(){const type=$('documentType').value;$('invoiceFields').hidden=type!=='Rechnung';$('validLabel').hidden=type==='Rechnung';$('closingText').value=closingTexts[type]??defaultClosings[type];lastDocType=type}
